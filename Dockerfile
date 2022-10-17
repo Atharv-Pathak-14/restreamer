@@ -1,26 +1,10 @@
-ARG NODE_IMAGE=node:17-alpine3.15
+ARG RESTREAMER_UI_IMAGE=datarhei/restreamer-ui:latest
 
 ARG CORE_IMAGE=datarhei/base:alpine-core-latest
 
 ARG FFMPEG_IMAGE=datarhei/base:alpine-ffmpeg-latest
 
-FROM $NODE_IMAGE as restreamer-ui
-
-ARG NODE_SPACE_SIZE=10240
-ENV NODE_OPTIONS="--openssl-legacy-provider --max-old-space-size=$NODE_SPACE_SIZE"
-
-ENV PUBLIC_URL "/ui"
-
-COPY . /ui
-
-RUN cd /ui && \
-	npm config set fetch-retries 10 && \
-	npm config set fetch-retry-mintimeout 100000 && \
-	npm config set fetch-retry-maxtimeout 600000 && \
-	npm config set cache-min 3600 && \
-	npm config ls -l && \
-	npm install && \
-	npm run build
+FROM $RESTREAMER_UI_IMAGE as restreamer-ui
 
 FROM $CORE_IMAGE as core
 
@@ -29,12 +13,21 @@ FROM $FFMPEG_IMAGE
 COPY --from=core /core /core
 COPY --from=restreamer-ui /ui/build /core/ui
 
+COPY ./run.sh /core/bin/run.sh
+COPY ./ui-root /core/ui-root
+
 RUN ffmpeg -buildconf
 
 ENV CORE_CONFIGFILE=/core/config/config.json
 ENV CORE_DB_DIR=/core/config
 ENV CORE_ROUTER_UI_PATH=/core/ui
 ENV CORE_STORAGE_DISK_DIR=/core/data
+
+EXPOSE 8080/tcp
+EXPOSE 8181/tcp
+EXPOSE 1935/tcp
+EXPOSE 1936/tcp
+EXPOSE 6000/udp
 
 VOLUME ["/core/data", "/core/config"]
 ENTRYPOINT ["/core/bin/run.sh"]
